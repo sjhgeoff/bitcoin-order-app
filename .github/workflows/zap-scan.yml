@@ -1,0 +1,28 @@
+name: owasp-scan
+on:
+  push:
+    branches: [githubcicd]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16.20.2'
+      - name: Build the application under test
+        run: |
+          npm ci --force --no-audit
+          npm run build -- --base-href /bitcoin-order-app/
+      - name: Observe local application responses with ZAP
+        run: scripts/zap-script.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zap report
+          path: zap_baseline_report.html
+          if-no-files-found: error

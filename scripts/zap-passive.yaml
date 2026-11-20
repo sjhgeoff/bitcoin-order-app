@@ -1,0 +1,34 @@
+env:
+  contexts:
+    - name: workshop-app
+      urls:
+        - http://app.workshop.test/bitcoin-order-app/
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+jobs:
+  - type: requestor
+    requests:
+      - url: http://app.workshop.test/bitcoin-order-app/
+        method: GET
+        responseCode: 200
+      - url: http://app.workshop.test/bitcoin-order-app/manifest.webmanifest
+        method: GET
+        responseCode: 200
+      - url: http://app.workshop.test/bitcoin-order-app/ngsw-worker.js
+        method: GET
+        responseCode: 200
+      - url: http://app.workshop.test/bitcoin-order-app/assets/pixel.gif
+        method: GET
+        responseCode: 200
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 3
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /tmp
+      reportFile: zap_baseline_report.html
+      reportTitle: Workshop ZAP passive HTTP report
+      reportDescription: Four normal GET responses from the locally built frontend served by nginx on an isolated network.

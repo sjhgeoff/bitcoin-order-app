@@ -1,0 +1,41 @@
+name: sast-scan
+on:
+  push:
+    branches: [githubcicd]
+permissions:
+  contents: read
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16.20.2'
+      - name: Install dependencies
+        run: npm ci --force --no-audit
+      - name: Download and verify OWASP Dependency-Check 13.0.0
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --location --retry 3 --output dependency-check.zip https://github.com/dependency-check/DependencyCheck/releases/download/v13.0.0/dependency-check-13.0.0-release.zip
+          echo '44d920d1ec03e948df862a253f0912782a31b9beee8a7c8895b9cb95760176ed  dependency-check.zip' | sha256sum --check
+          unzip -q dependency-check.zip
+      - name: Check repository dependencies
+        run: |
+          "$RUNNER_TEMP/dependency-check/bin/dependency-check.sh" \
+            --project "bitcoin" \
+            --nvdDatafeed 'https://open-vulnerability-data-mirror-production.up.railway.app/nvdcve-{0}.json.gz' \
+            --scan . --exclude '**/.git/**' --exclude '**/node_modules/.cache/**' \
+            --disableOssIndex --format HTML --format JSON --out "$RUNNER_TEMP/workshop-reports"
+      - name: Verify report coverage
+        run: |
+          jq -e '.dependencies | length > 0' "$RUNNER_TEMP/workshop-reports/dependency-check-report.json"
+          jq '{dependencies: (.dependencies | length), flagged_entries: ([.dependencies[] | select((.vulnerabilities // []) | length > 0)] | length)}' "$RUNNER_TEMP/workshop-reports/dependency-check-report.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sast-report
+          path: ${{ runner.temp }}/workshop-reports/dependency-check-report.html
+          if-no-files-found: error
