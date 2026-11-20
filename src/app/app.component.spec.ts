@@ -1,11 +1,15 @@
-import { TestBed, async } from '@angular/core/testing';
+import { TestBed, waitForAsync } from '@angular/core/testing';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatButtonModule } from '@angular/material/button';
 import { RouterTestingModule } from '@angular/router/testing';
 import { AppComponent } from './app.component';
 
 describe('AppComponent', () => {
-  beforeEach(async(() => {
+  beforeEach(waitForAsync(() => {
     TestBed.configureTestingModule({
       imports: [
+        MatButtonModule,
+        MatToolbarModule,
         RouterTestingModule
       ],
       declarations: [
@@ -26,10 +30,10 @@ describe('AppComponent', () => {
     expect(app.title).toEqual('bitcoin');
   });
 
-  // it('should render title', () => {
-  //   const fixture = TestBed.createComponent(AppComponent);
-  //   fixture.detectChanges();
-  //   const compiled = fixture.debugElement.nativeElement;
-  //   expect(compiled.querySelector('.mat-toolbar .mat-toolbar-row span').textContent).toContain('Bitcoin Changer v2');
-  // });
+  it('should display the Bitcoin Changer toolbar title', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const toolbar = fixture.nativeElement.querySelector('mat-toolbar-row');
+    expect(toolbar.textContent).toContain('Bitcoin Changer v1.2');
+  });
 });
