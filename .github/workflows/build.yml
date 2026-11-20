@@ -1,85 +1,72 @@
-name: Bitcoin order app
-
+name: Bitcoin order App
 on:
   push:
-    branches: [githubcicd]
-  workflow_dispatch:
-
-concurrency:
-  group: workshop6-${{ github.ref }}
-  cancel-in-progress: false
-
-permissions: {}
-
+    branches:
+      - githubcicd
 jobs:
-  build:
-    if: github.ref == 'refs/heads/githubcicd'
+  ci:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+
+    strategy:
+      matrix:
+        node-version: [16.x]
+
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v2
         with:
-          persist-credentials: false
-      - uses: actions/setup-node@v6
+          token: ${{ secrets.WORKSHOP6_GITHUB_TOKEN }}
+      - uses: browser-actions/setup-chrome@latest
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
         with:
-          node-version: '16.20.2'
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --force --no-audit
+          node-version: ${{ matrix.node-version }}
+
+      - name: Cache node modules
+        id: cache-nodemodules
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-node-modules
+        with:
+          # caching node_modules
+          path: node_modules
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+      - name: Install Dependencies
+        if: steps.cache-nodemodules.outputs.cache-hit != 'true'
+        run: |
+          npm ci --force
+      - name: Build
+        run: |
+          npm run build --force
       - name: Lint
-        run: npm run lint
-      - name: Browser unit tests
-        run: npm test -- --progress=false
-      - name: Build for the repository's Pages URL
-        env:
-          REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          npm run build -- --base-href "/$REPO_NAME/"
-          cp dist/bitcoin/index.html dist/bitcoin/404.html
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: dist/bitcoin
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Generate release notes from conventional commits
+          npm run lint
+      - name: Update types to latest
+        run: |
+          npm install --save-dev @types/node@latest --force
+      #- name: Test
+      #  run: |
+      #    npm run test --watch=false --browsers=ChromeHeadless
+      - name: Conventional Changelog Action
         id: changelog
-        uses: TriPSs/conventional-changelog-action@469f0e5e35831fbd1962706f29f65daf0a5723f2 # v6.5.0
+        uses: TriPSs/conventional-changelog-action@v3
         with:
-          output-file: 'false'
-          skip-git-pull: 'true'
-          skip-commit: 'true'
-          skip-tag: 'true'
-          git-push: 'false'
-      - name: Publish GitHub release and tag
-        if: steps.changelog.outputs.skipped == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.changelog.outputs.tag }}
-          RELEASE_NOTES: ${{ steps.changelog.outputs.clean_changelog }}
-        run: |
-          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          github-token: ${{ secrets.WORKSHOP6_GITHUB_TOKEN }}
+          output-file: "false"
 
-  deploy:
-    needs: [build, release]
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy the tested build to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Create Release
+        uses: actions/create-release@v1
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKSHOP6_GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          release_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+      - name: Deploy
+        run: |
+          npm run deploy
+
